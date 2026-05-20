@@ -1,17 +1,10 @@
 """
 visualization.py
 ----------------
-Plotting utilities for n = 2 and n = 3 only.
+Plotting utilities for n=2 and n=3 polytopes.
 
-For 2D:
-  - scatter plot of the original point cloud
-  - convex hull boundary drawn as a polygon
-
-For 3D:
-  - scatter plot of points
-  - convex hull facets rendered as semi-transparent polygons
-
-All functions accept an HPolytope and the original points array.
+2D: scatter plot of the point cloud with the convex hull drawn as a polygon.
+3D: scatter plot with hull facets rendered as semi-transparent polygons.
 """
 
 import warnings
@@ -24,15 +17,11 @@ from polytope_builder import HPolytope
 
 
 def _ensure_backend(show: bool) -> None:
-    """Switch to Agg (non-interactive) backend when we only need to save files."""
+    """Switch to the Agg backend when we only need to save files."""
     import matplotlib
     if not show:
         matplotlib.use("Agg")
 
-
-# ---------------------------------------------------------------------------
-# Guard: only 2D or 3D
-# ---------------------------------------------------------------------------
 
 def _check_dim(polytope: HPolytope) -> None:
     if polytope.n not in (2, 3):
@@ -40,10 +29,6 @@ def _check_dim(polytope: HPolytope) -> None:
             f"Visualization is only supported for n=2 or n=3, got n={polytope.n}."
         )
 
-
-# ---------------------------------------------------------------------------
-# 2D
-# ---------------------------------------------------------------------------
 
 def plot_2d(
     polytope: HPolytope,
@@ -56,16 +41,7 @@ def plot_2d(
 ) -> None:
     """
     Plot a 2D convex hull with the underlying point cloud.
-
-    Parameters
-    ----------
-    polytope   : HPolytope (n must be 2)
-    points     : (N, 2) original point cloud
-    title      : plot title
-    ax         : existing matplotlib Axes (created if None)
-    point_color: colour for scatter points
-    hull_color : colour for hull boundary
-    save_path  : if given, save figure to this path
+    Vertices are ordered by angle around the centroid to draw a clean polygon.
     """
     _check_dim(polytope)
 
@@ -83,12 +59,10 @@ def plot_2d(
     else:
         fig = ax.figure
 
-    # Scatter
     ax.scatter(points[:, 0], points[:, 1], s=15, alpha=0.4,
                color=point_color, label="points", zorder=2)
 
-    # Hull polygon — order vertices by angle around centroid
-    verts = polytope.vertices  # (k, 2)
+    verts = polytope.vertices
     centroid = verts.mean(axis=0)
     angles = np.arctan2(verts[:, 1] - centroid[1], verts[:, 0] - centroid[0])
     order = np.argsort(angles)
@@ -105,14 +79,10 @@ def plot_2d(
 
     if save_path:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"  [viz] saved 2D plot → {save_path}")
+        print(f"  [viz] saved 2D plot to {save_path}")
 
     return fig, ax
 
-
-# ---------------------------------------------------------------------------
-# 3D
-# ---------------------------------------------------------------------------
 
 def plot_3d(
     polytope: HPolytope,
@@ -124,20 +94,7 @@ def plot_3d(
     hull_alpha: float = 0.20,
     save_path: Optional[str] = None,
 ) -> None:
-    """
-    Plot a 3D convex hull with the underlying point cloud.
-
-    Parameters
-    ----------
-    polytope   : HPolytope (n must be 3)
-    points     : (N, 3) original point cloud
-    title      : plot title
-    ax         : existing Axes3D (created if None)
-    point_color: scatter colour
-    hull_color : facet colour
-    hull_alpha : facet transparency
-    save_path  : if given, save figure to this path
-    """
+    """Plot a 3D convex hull with the underlying point cloud."""
     _check_dim(polytope)
 
     try:
@@ -154,13 +111,11 @@ def plot_3d(
     else:
         fig = ax.figure
 
-    # Scatter
     ax.scatter(
         points[:, 0], points[:, 1], points[:, 2],
         s=10, alpha=0.3, color=point_color, label="points",
     )
 
-    # Rebuild hull to get simplices (triangulated facets)
     hull = ConvexHull(points)
     facets = [points[simplex] for simplex in hull.simplices]
     poly3d = Poly3DCollection(
@@ -179,14 +134,10 @@ def plot_3d(
 
     if save_path:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"  [viz] saved 3D plot → {save_path}")
+        print(f"  [viz] saved 3D plot to {save_path}")
 
     return fig, ax
 
-
-# ---------------------------------------------------------------------------
-# Unified entry point
-# ---------------------------------------------------------------------------
 
 def visualize(
     polytope: HPolytope,
@@ -197,16 +148,8 @@ def visualize(
     **kwargs,
 ) -> None:
     """
-    Auto-dispatch to plot_2d or plot_3d based on polytope.n.
-
-    Parameters
-    ----------
-    polytope  : HPolytope (n = 2 or 3)
-    points    : (N, n) original point cloud
-    title     : plot title
-    save_path : if given, save figure here (extension determines format)
-    show      : call plt.show() after plotting
-    **kwargs  : forwarded to plot_2d / plot_3d
+    Dispatch to plot_2d or plot_3d based on polytope.n.
+    Pass show=False to save without opening an interactive window.
     """
     _check_dim(polytope)
     _ensure_backend(show)
@@ -225,4 +168,4 @@ def visualize(
     if show:
         plt.show()
     else:
-        plt.close("all")  # free memory, no blocking window
+        plt.close("all")

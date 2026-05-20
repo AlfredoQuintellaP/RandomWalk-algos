@@ -1,18 +1,12 @@
 """
 polytope_builder.py
 -------------------
-Builds a polytope from a point cloud:
-  1. Compute convex hull (using scipy)
-  2. Convert to H-representation: Ax <= b
-  3. Optionally wrap in volestipy HPolytope for future random-walk use
-  4. Export to disk (npz + json)
+Builds a polytope from a point cloud by computing its convex hull and
+converting the result to an H-representation (Ax <= b).
 
-The H-representation is derived from the convex hull equations:
-  scipy ConvexHull stores each facet as: equations[i] = [normal | offset]
-  meaning  normal · x + offset <= 0  for interior points,
-  which we rewrite as  normal · x <= -offset  =>  A = normals, b = -offsets.
-
-Future extension: pass HPolytope directly to walk samplers (Hit-and-Run, etc.).
+scipy's ConvexHull stores each facet as equations[i] = [normal | offset],
+where normal · x + offset <= 0 for interior points. Rewriting gives
+normal · x <= -offset, so A = normals and b = -offsets.
 """
 
 import json
@@ -24,32 +18,22 @@ import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
 
-# ---------------------------------------------------------------------------
-# Data container
-# ---------------------------------------------------------------------------
-
 @dataclass
 class HPolytope:
     """
     H-representation of a convex polytope: { x in R^n : A @ x <= b }
 
-    Attributes
-    ----------
     A        : (m, n) constraint matrix
-    b        : (m,)  right-hand side vector
+    b        : (m,) right-hand side vector
     n        : ambient dimension
-    vertices : (k, n) array of vertex coordinates (from convex hull)
-    metadata : optional dict for provenance / experiment info
+    vertices : (k, n) vertex coordinates from the convex hull
+    metadata : optional provenance dict
     """
     A: np.ndarray
     b: np.ndarray
     n: int
     vertices: np.ndarray
     metadata: dict = field(default_factory=dict)
-
-    # ------------------------------------------------------------------
-    # Convenience properties (useful for future random-walk implementations)
-    # ------------------------------------------------------------------
 
     @property
     def num_constraints(self) -> int:
@@ -60,41 +44,23 @@ class HPolytope:
         return self.vertices.shape[0]
 
     def contains(self, x: np.ndarray, tol: float = 1e-8) -> bool:
-        """Return True if point x satisfies all inequalities (up to tol)."""
+        """Return True if x satisfies all inequalities up to the given tolerance."""
         return bool(np.all(self.A @ x <= self.b + tol))
 
     def interior_point(self) -> np.ndarray:
-        """
-        Return the centroid of vertices — a robust interior point.
-        Useful as a starting point for random walks.
-        """
+        """Return the centroid of the vertices, a reliable interior starting point."""
         return self.vertices.mean(axis=0)
 
-
-# ---------------------------------------------------------------------------
-# Builder
-# ---------------------------------------------------------------------------
 
 def build_polytope(
     points: np.ndarray,
     metadata: Optional[dict] = None,
 ) -> HPolytope:
     """
-    Compute the convex hull of `points` and return an HPolytope.
+    Compute the convex hull of the given points and return an HPolytope.
 
-    Parameters
-    ----------
-    points   : (N, n) array of points in R^n
-    metadata : optional provenance dict stored on the polytope
-
-    Returns
-    -------
-    HPolytope with A, b, n, vertices set.
-
-    Raises
-    ------
-    ValueError  if the point cloud is degenerate (fewer than n+1 points,
-                or all points are co-planar up to numerical precision).
+    Raises ValueError if the point cloud is degenerate (fewer than n+1
+    points, or all points are coplanar up to numerical precision).
     """
     N, n = points.shape
 
@@ -108,20 +74,18 @@ def build_polytope(
         hull = ConvexHull(points)
     except QhullError as e:
         raise ValueError(
-            f"ConvexHull failed — point cloud may be degenerate (co-planar / "
-            f"co-linear). Try more points or a different distribution.\n"
+            f"ConvexHull failed — point cloud may be degenerate (coplanar or "
+            f"colinear). Try more points or a different distribution.\n"
             f"QhullError: {e}"
         )
 
-    # hull.equations[i] = [a_0, ..., a_{n-1}, b_offset]
-    # facet condition: a · x + b_offset <= 0  =>  a · x <= -b_offset
-    normals = hull.equations[:, :n]   # (m, n)
-    offsets = hull.equations[:, n]    # (m,)
+    normals = hull.equations[:, :n]
+    offsets = hull.equations[:, n]
 
     A = normals
     b = -offsets
 
-    vertices = points[hull.vertices]  # (k, n)
+    vertices = points[hull.vertices]
 
     return HPolytope(
         A=A,
@@ -132,20 +96,9 @@ def build_polytope(
     )
 
 
-# ---------------------------------------------------------------------------
-# Export / Import
-# ---------------------------------------------------------------------------
-
 def export_polytope(polytope: HPolytope, path: str) -> None:
     """
-    Save the polytope to two files:
-      <path>.npz  — numpy arrays (A, b, vertices)
-      <path>.json — metadata + scalar info
-
-    Parameters
-    ----------
-    polytope : HPolytope to save
-    path     : base file path (without extension)
+    Save the polytope to <path>.npz (arrays) and <path>.json (metadata).
     """
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
@@ -171,32 +124,14 @@ def export_polytope(polytope: HPolytope, path: str) -> None:
 
 
 def export_points(points: np.ndarray, path: str, label: str = "points") -> None:
-    """
-    Save raw point cloud to <path>.npz.
-
-    Parameters
-    ----------
-    points : (N, n) array
-    path   : base file path (without extension)
-    label  : key name inside the npz archive
-    """
+    """Save a raw point cloud to <path>.npz."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     np.savez_compressed(path + ".npz", **{label: points})
     print(f"  [export] {path}.npz  ({points.shape[0]} points, dim={points.shape[1]})")
 
 
 def load_polytope(path: str) -> HPolytope:
-    """
-    Load an HPolytope previously saved with export_polytope().
-
-    Parameters
-    ----------
-    path : base file path (without extension)
-
-    Returns
-    -------
-    HPolytope
-    """
+    """Load an HPolytope previously saved with export_polytope()."""
     arrays = np.load(path + ".npz")
     with open(path + ".json") as f:
         meta = json.load(f)
@@ -214,21 +149,10 @@ def load_polytope(path: str) -> HPolytope:
     )
 
 
-# ---------------------------------------------------------------------------
-# volestipy integration
-# ---------------------------------------------------------------------------
-
 def to_volestipy(polytope: HPolytope):
     """
     Wrap an HPolytope in a volestipy HPolytope object.
-
-    volestipy's HPolytope(A, b) expects A (m×n) and b (m,) or (m,1).
-    Returns None (with a warning) if volestipy is not installed.
-
-    Future extension: pass the returned object directly to volesti random-walk
-    samplers, e.g.:
-        vp = to_volestipy(hp)
-        samples = vp.generate_samples("HnR", ...)
+    Returns None with a warning if volestipy is not installed.
     """
     try:
         from volestipy import HPolytope as VHPolytope  # type: ignore

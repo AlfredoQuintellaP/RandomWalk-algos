@@ -2,19 +2,15 @@
 point_generators.py
 -------------------
 Generates point clouds in R^n using three distributions:
-  1. Gaussian
-  2. Uniform (in a hypercube)
-  3. Dirichlet (on the simplex then projected to R^n)
-     Justification: Dirichlet naturally lives on the probability simplex,
-     producing a "corner-rich" geometry that yields polytopes with many
-     vertices near the coordinate axes — a useful contrast to the
-     round/symmetric shapes from Gaussian/Uniform.
 
-Each distribution supports two variants:
-  - normal   : isotropic, identity-scaled
-  - elongated: anisotropic, axis-scaled by a diagonal transformation
+  1. Gaussian — isotropic standard normal
+  2. Uniform  — uniform in a hypercube
+  3. Dirichlet — sampled from the probability simplex, giving a
+                 corner-rich geometry that contrasts with the round
+                 shapes of Gaussian and Uniform
 
-Future extension: add distributions or transformations for custom random-walk experiments.
+Each distribution has two variants: "normal" (isotropic) and "elongated"
+(anisotropic, scaled per axis by powers of 2).
 """
 
 import numpy as np
@@ -23,40 +19,22 @@ from typing import Literal, Optional
 
 VariantType = Literal["normal", "elongated"]
 
-# Default scale factors for elongated variant (per axis)
-DEFAULT_ELONGATION = None  # will be set per dimension inside functions
-
 
 def _elongation_scales(n: int) -> np.ndarray:
-    """
-    Build a diagonal scale vector for the elongated variant.
-    Axis k gets scale 2^k, so the geometry grows exponentially along each axis.
-    """
+    """Per-axis scale factors for the elongated variant: axis k gets scale 2^k."""
     return np.array([2.0 ** k for k in range(n - 1, -1, -1)])
 
 
 def _apply_elongation(points: np.ndarray, scales: Optional[np.ndarray] = None) -> np.ndarray:
     """
-    Apply a diagonal (anisotropic) linear transformation: x_k -> scale_k * x_k.
-
-    Parameters
-    ----------
-    points : (N, n) array
-    scales : (n,) array of per-axis scale factors; defaults to 2^k per axis.
-
-    Returns
-    -------
-    Transformed (N, n) array.
+    Apply a diagonal anisotropic transform: x_k -> scale_k * x_k.
+    Scales default to 2^k per axis if not provided.
     """
     n = points.shape[1]
     if scales is None:
         scales = _elongation_scales(n)
     return points * scales[np.newaxis, :]
 
-
-# ---------------------------------------------------------------------------
-# 1. Gaussian
-# ---------------------------------------------------------------------------
 
 def gaussian_points(
     n: int,
@@ -67,19 +45,7 @@ def gaussian_points(
 ) -> np.ndarray:
     """
     Sample N points from an isotropic standard Gaussian in R^n,
-    optionally stretched by an anisotropic diagonal transform.
-
-    Parameters
-    ----------
-    n       : dimension
-    N       : number of points
-    variant : 'normal' or 'elongated'
-    rng     : numpy random Generator (for reproducibility)
-    elongation_scales : custom per-axis scales for 'elongated' variant
-
-    Returns
-    -------
-    (N, n) float64 array
+    optionally stretched by a diagonal anisotropic transform.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -92,10 +58,6 @@ def gaussian_points(
     return points
 
 
-# ---------------------------------------------------------------------------
-# 2. Uniform (hypercube [-1, 1]^n)
-# ---------------------------------------------------------------------------
-
 def uniform_points(
     n: int,
     N: int,
@@ -107,19 +69,7 @@ def uniform_points(
 ) -> np.ndarray:
     """
     Sample N points uniformly in [low, high]^n,
-    optionally stretched by an anisotropic diagonal transform.
-
-    Parameters
-    ----------
-    n, N    : dimension, number of points
-    variant : 'normal' or 'elongated'
-    rng     : numpy random Generator
-    low, high : hypercube bounds
-    elongation_scales : custom per-axis scales for 'elongated' variant
-
-    Returns
-    -------
-    (N, n) float64 array
+    optionally stretched by a diagonal anisotropic transform.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -132,10 +82,6 @@ def uniform_points(
     return points
 
 
-# ---------------------------------------------------------------------------
-# 3. Dirichlet (simplex-based)
-# ---------------------------------------------------------------------------
-
 def dirichlet_points(
     n: int,
     N: int,
@@ -145,46 +91,25 @@ def dirichlet_points(
     elongation_scales: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
-    Sample N points that are Dirichlet-distributed in R^n (full-dimensional).
+    Sample N points from a Dirichlet distribution embedded in R^n.
 
-    Strategy: sample from Dirichlet(alpha) with n+1 components (living on the
-    n-simplex in R^{n+1}), then project onto the first n coordinates and add
-    a small isotropic noise to ensure full-dimensional spread.  This preserves
-    the corner-biased, simplex-like geometry while avoiding the degenerate
-    co-planar case that arises when all coordinates sum to 1 exactly.
+    Points are drawn from Dirichlet(alpha) with n+1 components (living on
+    the n-simplex in R^{n+1}), then projected onto the first n coordinates.
+    A small isotropic noise term ensures the resulting cloud is
+    full-dimensional rather than degenerate.
 
-    Justification: Dirichlet concentrates mass near simplex vertices (corners
-    of the positive orthant face), producing polytopes with a very different
-    combinatorial structure from Gaussian/Uniform — useful for benchmarking
-    random walks in corner-rich geometries.
-
-    Parameters
-    ----------
-    n       : ambient dimension
-    N       : number of points
-    variant : 'normal' or 'elongated'
-    alpha   : Dirichlet concentration parameter vector (length n+1).
-              Defaults to [0.5, ..., 0.5] (sparse / corner-biased).
-    rng     : numpy random Generator
-    elongation_scales : custom per-axis scales for 'elongated' variant
-
-    Returns
-    -------
-    (N, n) float64 array.
+    The default alpha=[0.5, ..., 0.5] produces a sparse, corner-biased
+    geometry that yields polytopes with a different combinatorial structure
+    than Gaussian or Uniform clouds.
     """
     if rng is None:
         rng = np.random.default_rng()
     if alpha is None:
-        # n+1 components so the simplex spans R^n after projection
         alpha = np.full(n + 1, 0.5)
 
-    # Sample on the n-simplex embedded in R^{n+1}
     simplex_pts = rng.dirichlet(alpha, size=N)  # (N, n+1)
+    points = simplex_pts[:, :n]
 
-    # Project to first n coordinates — points no longer sum to exactly 1
-    points = simplex_pts[:, :n]  # (N, n)
-
-    # Add tiny isotropic noise to guarantee full-dimensional hull
     noise_scale = 1e-4
     points = points + rng.standard_normal((N, n)) * noise_scale
 
@@ -193,11 +118,6 @@ def dirichlet_points(
 
     return points
 
-
-# ---------------------------------------------------------------------------
-# Registry: maps string names to generator functions
-# (convenient for main.py orchestration and future random-walk experiments)
-# ---------------------------------------------------------------------------
 
 GENERATORS = {
     "gaussian":  gaussian_points,
@@ -217,21 +137,18 @@ def generate(
     """
     Unified entry point for point generation.
 
-    Parameters
-    ----------
-    distribution : one of 'gaussian', 'uniform', 'dirichlet'
+    distribution : one of "gaussian", "uniform" or "dirichlet"
     n            : dimension
     N            : number of points
-    variant      : 'normal' or 'elongated'
+    variant      : "normal" or "elongated"
     seed         : integer seed for reproducibility
-    **kwargs     : forwarded to the specific generator
 
-    Returns
-    -------
-    (N, n) float64 array
+    Returns an (N, n) float64 array.
     """
     if distribution not in GENERATORS:
-        raise ValueError(f"Unknown distribution '{distribution}'. Choose from {list(GENERATORS)}")
+        raise ValueError(
+            f"Unknown distribution '{distribution}'. Choose from {list(GENERATORS)}"
+        )
 
     rng = np.random.default_rng(seed)
     return GENERATORS[distribution](n=n, N=N, variant=variant, rng=rng, **kwargs)
