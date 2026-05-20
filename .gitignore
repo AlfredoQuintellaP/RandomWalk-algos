@@ -1,0 +1,38 @@
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# C extensions
+*.so
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+cmake-build-*/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Virtual environments
+venv/
+env/
+.venv/
+random-walks/
+
+# pytest / cache
+.pytest_cache/
+.cache/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
