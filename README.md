@@ -78,3 +78,77 @@ outputs/
 ## Extending to Random Walks
 
 The `HPolytope` dataclass and `to_volestipy()` are designed for easy extension.
+
+## Some troubleshooting for the volestipy
+
+The process I used to make volestipy work was the following:
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/GeomScale/volestipy.git
+cd volestipy
+volestipy requires building the C++ backend and Python bindings from source.
+```
+
+### 2. Download external dependencies
+
+The project depends on lp_solve, which I had to download manually:
+
+```
+wget -P external/ \
+https://sourceforge.net/projects/lpsolve/files/lpsolve/5.5.2.11/lp_solve_5.5.2.11_source.tar.gz
+
+tar xzf external/lp_solve_5.5.2.11_source.tar.gz -C external/
+```
+
+If needed, ensure the extracted folder is correctly placed inside external/.
+
+### 3. Configure the build with CMake
+```
+mkdir -p build
+cd build
+
+cmake .. \
+  -DVOLESTI_INCLUDE_DIR=../external/volesti/include \
+  -DCMAKE_BUILD_TYPE=Release
+```
+
+### 4. Compile the project
+
+```
+cmake --build . -j$(nproc)
+```
+
+### 5. Fix shared library location (if needed)
+
+In some cases, the compiled Python extension may need to be manually placed in the package folder:
+
+```
+cp build/_volestipy*.so ../volestipy/
+```
+
+### 6. Fix Python packaging configuration
+
+Ensure pyproject.toml includes package discovery:
+
+```
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["volestipy*"]
+```
+
+### 7. Install Python package (editable mode)
+
+From the repository root:
+
+```
+pip install -e .
+```
+
+### 8. Verify installation
+```
+cd ~
+python -c "import volestipy; print(volestipy.__file__)"
+```
+
