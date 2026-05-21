@@ -1,0 +1,9 @@
+{
+  "n": 3,
+  "num_constraints": 46,
+  "num_vertices": 25,
+  "distribution": "gaussian",
+  "variant": "normal",
+  "N_points": 200,
+  "seed": 42
+}

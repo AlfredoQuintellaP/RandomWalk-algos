@@ -1,0 +1,9 @@
+{
+  "n": 3,
+  "num_constraints": 74,
+  "num_vertices": 39,
+  "distribution": "uniform",
+  "variant": "normal",
+  "N_points": 200,
+  "seed": 44
+}

@@ -1,0 +1,9 @@
+{
+  "n": 2,
+  "num_constraints": 10,
+  "num_vertices": 10,
+  "distribution": "gaussian",
+  "variant": "elongated",
+  "N_points": 200,
+  "seed": 43
+}
