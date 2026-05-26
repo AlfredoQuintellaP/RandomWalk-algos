@@ -1,0 +1,181 @@
+\section{Foundations}
+
+\begin{definition}[Affine hull]
+The affine hull of a set $S$ is the set of all afiine combinations of elements of $S$, that is:
+\[
+\operatorname{aff}(S) = \left\{ \sum_{i=1}^{k} \lambda_i x_i \;\middle|\; x_i \in S,\; \sum_{i=1}^{k} \lambda_i = 1 \right\}.
+\]
+\end{definition}
+
+\begin{definition}[Convex hull]
+The convex hull of a set $S$ is the (unique) minimal convex set containing $X$, given by:
+\[
+\operatorname{conv}(S) = \left\{ \sum_{i=1}^{k} \lambda_i x_i \;\middle|\; x_i \in S,\; \lambda_i \geq 0,\; \sum_{i=1}^{k} \lambda_i = 1 \right\}.
+\]
+\end{definition}
+
+\begin{definition}[Polytope]
+A subset $P \subset \mathbb{R}^d$ is called a polytope if it is the set of solutions to a finite system of linear inequalities and is bounded.
+\end{definition}
+
+\begin{theorem}[Minkowski-Weyl]
+For a subset $P \subset \mathbb{R}^d$, the following statemetns are equivalent:
+\begin{itemize}
+    \item $P$ is a polytope, i.e, for some real (finite) matrix $A$ and real vector $b$, $P = \{x : Ax \leq b\}$ and $P$ is bounded,
+    \item There exist finitely many points $v_1, \dotsc, v_k \in \mathbb{R}^d$ such that $P = conv\{v_1, \dotsc,v_k\}$.
+\end{itemize}
+Then, one can see that every polytope have two representations, being the first known as (halfspace) H-representation and the latter (vertex) V-representation.
+\end{theorem}
+
+There is a well-defined equivalence between H and V-representations and some methods commonly used are:
+\begin{itemize}
+    \item Double description method (H-rep → V-rep):
+    Given a polytope in halfspace representation, the double description method enumerates the vertices and extreme rays of PP
+    P. The algorithm incrementally adds inequalities one at a time, maintaining throughout the set of extreme generators of the current polyhedron. When a new inequality is introduced, generators that satisfy it are retained, infeasible generators are discarded, and new generators are created at intersections along the boundary hyperplane. The complexity depends on both the number of inequalities and the number of extreme generators; in degenerate cases, the number of intermediate generators may grow exponentially.
+    \item Quickhull (V-rep → H-rep):
+    Given a finite point set , the Quickhull algorithm computes the convex hull and returns its halfspace representation. Starting from an initial simplex, the algorithm recursively expands the hull by selecting points lying outside the current hull and updating the visible facets. The resulting facets define inequalities, whose collection yields the H-representation.
+\end{itemize}
+
+\begin{definition}[Feasibility and interior point]
+A polytope $P$ is feasible if it is non-empty. A point $x \in P$ is an interior point if there exists a real $\epsilon > 0$ such that the ball $B(x,\epsilon) \subset P$ We denote the interior of $P$ by $\operatorname{int}(P)$.
+\end{definition}
+
+\begin{definition}[Full-dimenstionality]
+A polytope $P\subset \mathbb{R}^d$ is full-dimensional if its affine hull equals $\mathbb{R}^d$, or equivalently, if $P$ has non-empty interior. A polytope that is not full-dimensional is called degenerate.
+\end{definition}
+
+
+
+\begin{definition}[Inradius and circumradius]
+TODO
+\end{definition}
+
+\begin{definition}[Diameter]
+TODO
+\end{definition}
+
+\begin{proposition}[Boundedness and inner-ball property of full-dimensional polytope]
+Let $P \subset \mathbb{R}^d$ be a full-dimensional compact polytope, and let $x_0 \in \mathrm{int}(P)$ be an interior point. Then there exist constants $r, R > 0$ such that
+\[
+r \mathbb{B} \subseteq P - x_0 \subseteq R \mathbb{B},
+\]
+where $\mathbb{B} = \{x \in \mathbb{R}^d : \|x\|_2 \le 1\}$ is the unit Euclidean ball.
+\end{proposition}
+
+For sampling purposes, a reliable interior point for full-dimensional polytopes is the centroid of the vertices,
+\[
+x_0 = \frac{1}{k} \sum_{i=1}^{k} v_i,
+\]
+where $v_1, \ldots, v_k$ are the vertices of $P$.
+
+\begin{definition}[Chord through a point]
+TODO
+\end{definition}
+
+\begin{definition}[Isotropic position]
+A full-dimensional convex body $P \subset \mathbb{R}^d$ is in isotrpic position if its centroid is at the origin and its covariance is a scalar multiple of the identity,
+\[
+\int_K x \, dx = 0, \qquad \int_K x x^\top dx = L_K^2 \, I_n,
+\]
+\end{definition}
+
+\begin{definition}[Markov chain]
+A Markov chain on a state space $\Omega$ is a sequence of random variables $(X_0,X_1,\dotsc)$ satisfying the Markov property: for all $t\geq 1$ and all measurable sets $A \subset \Omega$,
+\[
+\mathbb{P}(X_{t+1} \in A \mid X_0, \ldots, X_t) = \mathbb{P}(X_{t+1} \in A \mid X_t).
+\]
+The future state depends only on the current state, not on the history.
+\end{definition}
+
+\begin{definition}[Transition kernel]
+A transition kernel on a measurable space $(K,\mathcal{F})$ is a function
+\[
+P : K \times \mathcal{F} \to [0,1]
+\]
+such that:
+\begin{enumerate}
+    \item for every fixed $x \in K$, the map
+    \[
+    A \mapsto P(x,A)
+    \]
+    is a probability measure on $(K,\mathcal{F})$;
+    
+    \item for every fixed measurable set $A \in \mathcal{F}$, the map
+    \[
+    x \mapsto P(x,A)
+    \]
+    is measurable.
+\end{enumerate}
+
+The quantity
+\[
+P(x,A)=\mathbb{P}(X_{t+1}\in A \mid X_t=x)
+\]
+represents the probability that the next state lies in $A$ given that the current state is $x$.
+\end{definition}
+
+\begin{definition}[Markov chain on a polytope]
+A Markov chain on a polytope $P\subset \mathbb{R}^d$ is a Markov chain with state space $\Omega = P$ and a transition kernel $K$ that maps each interior point $x \in \operatorname{int}(P)$ to a probability mesure supported on $P$.
+\end{definition}
+
+\begin{definition}[Reference measure and target]
+TODO
+\end{definition}
+
+\begin{definition}[Stationary distribution]
+A probability measure $\pi$ on $\Omega$ is stationary distribution of the Markov chain with transition kernel $K$ if:
+\[
+\pi(A) = \int_\Omega K(x, A)\, \pi(dx) \qquad \text{for all measurable } A \subseteq \Omega.
+\]
+Equivalently, $\pi K = \pi$: if $X_0 \sim \pi$, then $X_t \sim \pi$ for all $t \geq 0$.
+\end{definition}
+
+\begin{definition}[Reversibility (detailed balance)]
+TODO
+\end{definition}
+
+\begin{proposition}[Reversibility implies stationary]
+TODO
+\end{proposition}
+
+\begin{definition}[Irreducibility]
+A Markov chain with transition kernel $K$ and stationary distribution $\pi$ is $\pi$-irreducible if for every state $x \in \Omega$ and every measurable set $A$ with $\pi(A) > 0$, there exists $t\geq 1$ such that $K^t(x,A) > 0$. Informally, the chain can reach any region of positive measure from any starting point.
+\end{definition}
+
+\begin{definition}[Aperiodicity]
+A Markov chain is aperiodic if it does not cycle deterministic between disjoint subsets of $\Omega$. Formally, the chain has period $1$ at every state. Apariodicity, together with irretudcitbility, ensure convergence
+of $K^t(x,\cdot)$ to the stationary distribution as $t \to \infty$.
+\end{definition}
+
+\begin{theorem}[Ergodic theorem for Markov chain]
+TODO
+\end{theorem}
+
+\begin{definition}[Total variation distance]
+TODO
+\end{definition}
+
+\begin{definition}[Mixing time]
+TODO
+\end{definition}
+
+\begin{definition}[Spectral gap]
+TODO
+\end{definition}
+
+\begin{theorem}[Spectral gap controls mixing]
+TODO
+\end{theorem}
+
+\begin{definition}[Conductance (CHeeger coinstant)]
+TODO
+\end{definition}
+
+\begin{definition}[Cheeger inequality]
+TODO
+\end{definition}
+
+\begin{definition}[Logconcave measure]
+\end{definition}
+
+With the built foundations, now we can address the main problem in this work: desgin a Markov chain in a polytope that is irreducible, aperiodic and mixes rapidly. To study this
