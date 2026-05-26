@@ -3,14 +3,18 @@ point_generators.py
 -------------------
 Generates point clouds in R^n using three distributions:
 
-  1. Gaussian — isotropic standard normal
-  2. Uniform  — uniform in a hypercube
+  1. Gaussian  — isotropic standard normal
+  2. Uniform   — uniform in a hypercube
   3. Dirichlet — sampled from the probability simplex, giving a
                  corner-rich geometry that contrasts with the round
                  shapes of Gaussian and Uniform
 
-Each distribution has two variants: "normal" (isotropic) and "elongated"
-(anisotropic, scaled per axis by powers of 2).
+Each distribution has two variants:
+  - "normal"   : isotropic, same range on all axes
+  - "elongated": same distribution, but each axis has a smaller range
+                 than the previous one. In R^2: x in (-2,2), y in (-1,1).
+                 In R^n: axis k has half-width 2/(k+1), so axis 0 is the
+                 widest and the last axis is the narrowest.
 """
 
 import numpy as np
@@ -20,20 +24,16 @@ from typing import Literal, Optional
 VariantType = Literal["normal", "elongated"]
 
 
-def _elongation_scales(n: int) -> np.ndarray:
-    """Per-axis scale factors for the elongated variant: axis k gets scale 2^k."""
-    return np.array([2.0 ** k for k in range(n - 1, -1, -1)])
-
-
-def _apply_elongation(points: np.ndarray, scales: Optional[np.ndarray] = None) -> np.ndarray:
+def _elongated_halfwidths(n: int) -> np.ndarray:
     """
-    Apply a diagonal anisotropic transform: x_k -> scale_k * x_k.
-    Scales default to 2^k per axis if not provided.
+    Per-axis half-widths for the elongated variant.
+    Axis k has half-width 2/(k+1):
+      axis 0 -> 2.0  (widest)
+      axis 1 -> 1.0
+      axis 2 -> 0.67
+      ...
     """
-    n = points.shape[1]
-    if scales is None:
-        scales = _elongation_scales(n)
-    return points * scales[np.newaxis, :]
+    return np.array([2.0 / (k + 1) for k in range(n)])
 
 
 def gaussian_points(
@@ -41,21 +41,24 @@ def gaussian_points(
     N: int,
     variant: VariantType = "normal",
     rng: Optional[np.random.Generator] = None,
-    elongation_scales: Optional[np.ndarray] = None,
+    halfwidths: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
-    Sample N points from an isotropic standard Gaussian in R^n,
-    optionally stretched by a diagonal anisotropic transform.
+    Sample N points from a Gaussian in R^n.
+
+    normal   : standard normal on all axes (std=1)
+    elongated: each axis k has std = halfwidth_k, so the cloud is
+               narrower on higher-indexed axes
     """
     if rng is None:
         rng = np.random.default_rng()
 
-    points = rng.standard_normal((N, n))
+    if variant == "normal":
+        return rng.standard_normal((N, n))
 
-    if variant == "elongated":
-        points = _apply_elongation(points, elongation_scales)
-
-    return points
+    # elongated: per-axis std = half-width
+    hw = halfwidths if halfwidths is not None else _elongated_halfwidths(n)
+    return rng.standard_normal((N, n)) * hw[np.newaxis, :]
 
 
 def uniform_points(
@@ -65,20 +68,26 @@ def uniform_points(
     rng: Optional[np.random.Generator] = None,
     low: float = -1.0,
     high: float = 1.0,
-    elongation_scales: Optional[np.ndarray] = None,
+    halfwidths: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
-    Sample N points uniformly in [low, high]^n,
-    optionally stretched by a diagonal anisotropic transform.
+    Sample N points uniformly in R^n.
+
+    normal   : uniform in [low, high]^n  (same range on all axes)
+    elongated: axis k is uniform in [-hw_k, hw_k] where hw_k = 2/(k+1),
+               so x in (-2,2), y in (-1,1), z in (-0.67, 0.67), ...
     """
     if rng is None:
         rng = np.random.default_rng()
 
-    points = rng.uniform(low, high, size=(N, n))
+    if variant == "normal":
+        return rng.uniform(low, high, size=(N, n))
 
-    if variant == "elongated":
-        points = _apply_elongation(points, elongation_scales)
-
+    # elongated: per-axis bounds
+    hw = halfwidths if halfwidths is not None else _elongated_halfwidths(n)
+    points = np.empty((N, n))
+    for k in range(n):
+        points[:, k] = rng.uniform(-hw[k], hw[k], size=N)
     return points
 
 
@@ -88,33 +97,32 @@ def dirichlet_points(
     variant: VariantType = "normal",
     alpha: Optional[np.ndarray] = None,
     rng: Optional[np.random.Generator] = None,
-    elongation_scales: Optional[np.ndarray] = None,
+    halfwidths: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Sample N points from a Dirichlet distribution embedded in R^n.
 
-    Points are drawn from Dirichlet(alpha) with n+1 components (living on
-    the n-simplex in R^{n+1}), then projected onto the first n coordinates.
-    A small isotropic noise term ensures the resulting cloud is
-    full-dimensional rather than degenerate.
+    Points are drawn from Dirichlet(alpha) with n+1 components, then
+    projected onto the first n coordinates. A small noise term ensures
+    the cloud is full-dimensional.
 
-    The default alpha=[0.5, ..., 0.5] produces a sparse, corner-biased
-    geometry that yields polytopes with a different combinatorial structure
-    than Gaussian or Uniform clouds.
+    normal   : raw projection, no axis rescaling
+    elongated: each axis k is rescaled to fit within [-hw_k, hw_k],
+               preserving the simplex shape but compressing higher axes
     """
     if rng is None:
         rng = np.random.default_rng()
     if alpha is None:
         alpha = np.full(n + 1, 0.5)
 
-    simplex_pts = rng.dirichlet(alpha, size=N)  # (N, n+1)
-    points = simplex_pts[:, :n]
-
-    noise_scale = 1e-4
-    points = points + rng.standard_normal((N, n)) * noise_scale
+    simplex_pts = rng.dirichlet(alpha, size=N)   # (N, n+1)
+    points = simplex_pts[:, :n].copy()
+    points += rng.standard_normal((N, n)) * 1e-4  # ensure full-dimensional
 
     if variant == "elongated":
-        points = _apply_elongation(points, elongation_scales)
+        hw = halfwidths if halfwidths is not None else _elongated_halfwidths(n)
+        # rescale each axis from [0,1] range to [-hw_k, hw_k]
+        points = (points - 0.5) * 2 * hw[np.newaxis, :]
 
     return points
 
@@ -137,7 +145,7 @@ def generate(
     """
     Unified entry point for point generation.
 
-    distribution : one of "gaussian", "uniform" or "dirichlet"
+    distribution : one of "gaussian", "uniform", "dirichlet"
     n            : dimension
     N            : number of points
     variant      : "normal" or "elongated"
@@ -149,6 +157,5 @@ def generate(
         raise ValueError(
             f"Unknown distribution '{distribution}'. Choose from {list(GENERATORS)}"
         )
-
     rng = np.random.default_rng(seed)
     return GENERATORS[distribution](n=n, N=N, variant=variant, rng=rng, **kwargs)

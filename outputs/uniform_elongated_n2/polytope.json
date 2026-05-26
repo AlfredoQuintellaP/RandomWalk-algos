@@ -1,7 +1,7 @@
 {
   "n": 2,
-  "num_constraints": 19,
-  "num_vertices": 19,
+  "num_constraints": 14,
+  "num_vertices": 14,
   "distribution": "uniform",
   "variant": "elongated",
   "N_points": 200,
